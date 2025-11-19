@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QCM Linux - MOOC</title>
+    <style>
+        /* --- CSS : Le style du QCM --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .quiz-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 30px;
+        }
+
+        .question-block {
+            margin-bottom: 25px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            background-color: #fff;
+        }
+
+        .question-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .question-hint {
+            font-size: 0.85em;
+            color: #e67e22;
+            font-style: italic;
+            margin-left: 5px;
+            font-weight: normal;
+        }
+
+        .answers-list {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .answers-list li {
+            margin-bottom: 8px;
+        }
+
+        label {
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 4px;
+            display: block;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+            background-color: #fdfdfd;
+        }
+
+        label:hover {
+            background-color: #f0f0f0;
+            border-color: #ddd;
+        }
+
+        /* Classes pour la correction */
+        .correct-answer {
+            background-color: #d4edda !important;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            font-weight: bold;
+        }
+
+        .user-wrong {
+            background-color: #f8d7da !important;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        /* Indicateur manquant (bonne réponse non cochée) */
+        .missed-answer {
+            border: 2px dashed #28a745; 
+        }
+
+        /* Zone des boutons et résultats */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+            border-top: 2px solid #eee;
+            padding-top: 20px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            flex: 1;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        #submit-btn {
+            background-color: #3498db;
+            color: white;
+        }
+        #submit-btn:hover { background-color: #2980b9; }
+
+        #reveal-btn {
+            background-color: #95a5a6;
+            color: white;
+            display: none; /* Caché tant qu'on n'a pas validé une première fois */
+        }
+        #reveal-btn:hover { background-color: #7f8c8d; }
+        
+        #reload-btn {
+            background-color: #f39c12;
+            color: white;
+            display: none;
+        }
+
+        #results {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 1.4em;
+            font-weight: bold;
+            padding: 15px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="quiz-container">
+        <h1>QCM Système Linux</h1>
+        <div class="subtitle">Questions extraites du QCM 3A (Ordre aléatoire)</div>
+        
+        <div id="quiz">
+            </div>
+        
+        <div class="controls">
+            <button id="submit-btn">Valider mes réponses</button>
+            <button id="reveal-btn">Voir la correction détaillée</button>
+            <button id="reload-btn" onclick="location.reload()">Recommencer (Mélanger)</button>
+        </div>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        // --- JAVASCRIPT ---
+
+        // 1. BASE DE DONNÉES DES QUESTIONS (Transmises depuis le PDF)
+        // J'ai sélectionné les questions les plus claires et corrigé les erreurs d'OCR.
+        const rawQuestions = [
+            {
+                question: "Quelle commande permet de connaître l'emplacement d'une commande ?",
+                answers: { a: "what", b: "which", c: "where" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Un utilisateur peut-il changer son propre mot de passe ?",
+                answers: { a: "Oui", b: "Non" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Que permet la permission 'x' (exécution) sur un répertoire ?",
+                answers: { a: "de lire les fichiers", b: "de modifier la taille", c: "de supprimer le répertoire", d: "de traverser ce répertoire" },
+                correctAnswer: ["d"],
+                type: "single"
+            },
+            {
+                question: "Si vous lisez le synopsis d'une commande à partir de son man, les éléments entre crochets sont :",
+                answers: { a: "Optionnels", b: "Des commentaires", c: "Des variables d'environnement", d: "Des arguments requis" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Un fichier source et un lien dur (hardlink) doivent faire partie du même système de fichiers.",
+                answers: { a: "Vrai", b: "Faux" },
+                correctAnswer: ["a"], // Les hardlinks ne traversent pas les partitions
+                type: "single"
+            },
+            {
+                question: "La commande permettant d'afficher l'utilisation de la mémoire RAM est :",
+                answers: { a: "mem", b: "top", c: "free" },
+                correctAnswer: ["c"],
+                type: "single"
+            },
+            {
+                question: "Quel est le prompt usuel du shell pour un utilisateur NON root ?",
+                answers: { a: "$", b: "#", c: "%" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Les fichiers cachés sont des fichiers qui commencent par quel caractère ?",
+                answers: { a: "Un plus (+)", b: "Un point (.)", c: "Un tiret (-)", d: "Un astérisque (*)" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Le répertoire de plus haut niveau dans un système Linux est représenté par :",
+                answers: { a: "/ (slash)", b: "home", c: "/root", d: "." },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Quelle commande permet d'afficher le répertoire de travail où l'on se situe ?",
+                answers: { a: "pwd", b: "top", c: "where", d: "cd", e: "ps", f: "jobs", g: "free", h: "kill"},
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Les permissions des fichiers ne peuvent pas être modifiées par l'utilisateur root.",
+                answers: { a: "Vrai", b: "Faux" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Un script shell ayant les permissions 'rw-rw-rw-' peut-il être lancé avec la commande ./test.sh ?",
+                answers: { a: "Oui", b: "Non" },
+                correctAnswer: ["b"], // Il manque le bit 'x'
+                type: "single"
+            },
+            {
+                question: "L'administrateur root peut-il empêcher un utilisateur de se \"logger\" sur un système GNU / Linux ?",
+                answers: { a: "Oui", b: "Non" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Quels fichiers contiennent des informations sur les comptes utilisateurs ?",
+                answers: { a: "/etc/shadow", b: "/etc/group", c: "/etc/passwd", d: "/etc/passwords" },
+                correctAnswer: ["a", "c"], // passwd (infos) et shadow (mdp)
+                type: "multiple"
+            },
+            {
+                question: "Un administrateur peut-il changer le mot de passe d'un utilisateur ?",
+                answers: { a: "Oui", b: "Non" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Dans le résultat de la commande ls ci-joint \"----rw-rw- 1 sysadmin sysadmin 0 Nov 19 13:57 test\", sysadmin peut il lire le fichier ?",
+                answers: { a: "Oui", b: "Non" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Un système GNU/Linux peut faire fonctionner des applications de type :",
+                answers: { a: "Serveur web", b: "Serveur de base de données", c: "Serveur de mails", d: "Partage de fichiers", e: "Aucune de ces réponses n'est correcte" },
+                correctAnswer: ["a", "b", "c", "d"], // Linux fait tout ça
+                type: "multiple"
+            },
+            {
+                question: "Le shell est :",
+                answers: { a: "Un éditeur de texte", b: "Un outil de compilation", c: "Une machine virtuelle Java", d: "Un interpréteur de commandes qui les convertit en actions système" },
+                correctAnswer: ["d"],
+                type: "single"
+            },
+            {
+                question: "Quelle commande permet de changer votre répertoire de travail actuel ?",
+                answers: { a: "mv", b: "cd", c: "ls", d: "ed" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Parmi ces applications laquelle n'est-elle pas un éditeur de texte ?",
+                answers: { a: "emacs", b: "vim", c: "nano", d: "gimp", e: "maitre gims"},
+                correctAnswer: ["d"],
+                type: "single"
+            },
+            {
+                question: "Le répertoire /tmp est un répertoire temporaire conçu pour permettre à tout utilisateur de créer un fichier temporaire.",
+                answers: { a: "Vrai", b: "Faux" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Une paire de guillemets doubles (\") empêchera le shell d'interpréter tout caractère spécial",
+                answers: { a: "Vrai", b: "Faux" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Quelle commande utilise-t-on pour avoir de l'information sur l'usage d'une autre commande ?",
+                answers: { a: "which", b: "man", c: "help", d: "cat" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Dans le résultat de la commande ls ci-joint \"----rw-rw- 1 sysadmin sysadmin 0 Nov 19 13:57 test\", quel champ représente les permissions ?",
+                answers: { a: "----rw-rw-", b: "1", c: "sysadmin", d: "sysadmin 0" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Quel caractère fait en sorte que le caractère suivant soit traité comme s'il était entouré de guillemets simples ?",
+                answers: { a: "\\", b: "/", c: "*", d: "%", e: "$" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Quels utilisateurs peuvent-ils lire le fichier dont le résultat de la commande ls est \"-rw-r----- 1 root root 4 Nov 19 14:04 /etc/shadow\"",
+                answers: { a: "shadow", b: "Tous les utilisateurs", c: "N'importe quel membre du groupe password", d: "Aucun utilisateur", e: "root" },
+                correctAnswer: ["e"],
+                type: "single"
+            },
+            {
+                question: "Dans un système de fichiers Linux, les noms de fichiers sont-ils sensibles à la casse (majuscules/minuscules) ?",
+                answers: { a: "Oui", b: "Non" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Quel outil une distribution fournit-elle pour ajouter et supprimer des logiciels du système ?",
+                answers: { a: "Gestionnaire de paquets", b: "Outil de partitionnement", c: "API", d: "Compilateur" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Quelle option de la commande 'ls' permet d'afficher tous les fichiers, y compris les fichiers cachés ?",
+                answers: { a: "-L", b: "-H", c: "-a", d: "-w" },
+                correctAnswer: ["c"],
+                type: "single"
+            },
+            {
+                question: "Le point-virgule (;) peut être utilisé pour séparer plusieurs commandes à exécuter dans l'ordre.",
+                answers: { a: "Vrai", b: "Faux" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Dans le terme GNU/Linux, 'Linux' représente :",
+                answers: { a: "Les outils open source", b: "Le noyau du système d'exploitation", c: "Le terminal", d: "Le shell" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "La commande 'echo' :",
+                answers: { a: "Est utilisée pour afficher du texte sur la console", b: "Affiche le contenu d'un fichier", c: "Est utilisée pour l'affectation de variables", d: "Duplique le flux d'entrée vers le flux de sortie" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Quel est le prompt usuel du shell pour l'administrateur root :",
+                answers: { a: "$", b: "#", c: "%", d:"!", e: ">"},
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Quelle commande permet de créer un lien (link) entre 2 fichiers ?",
+                answers: { a: "link", b: "mv", c: "ln", d: "ls", e: "top"},
+                correctAnswer: ["c"],
+                type: "single"
+            },
+            {
+                question: "Quelle commande affichera les utilisateurs actuellement connectés au système ?",
+                answers: { a: "id", b: "whoami", c: "who", d: "which" },
+                correctAnswer: ["c"],
+                type: "single"
+            },
+            {
+                question: "Pour exécuter la plus récente itération d'une commande spécifique, il faut utiliser le caractère :",
+                answers: { a: "~", b: "h", c: "!", d: "*", e: "$"},
+                correctAnswer: ["c"],
+                type: "single"
+            },
+            {
+                question: "L'\"Epoch\" a commencé le 1er janvier 1970",
+                answers: { a: "Vrai", b: "Faux"},
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Le tilde (~) est utilisé pour représenter :",
+                answers: { a: "Rien de spécial", b: "Le répertoire personnel d'un utilisateur", c: "N'importe quel caractère simple", d: "Le répertoire au dessus du répertoire de travail actuel" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Le chemin '/home/sysadmin' est-il absolu ou relatif ?",
+                answers: { a: "Absolu", b: "Relatif" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Le chemin 'sysadmin/Documents' est-il absolu ou relatif ?",
+                answers: { a: "Absolu", b: "Relatif" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Une paire de guillemets simples (\`) empêchera le shell d'interpréter tout caractère spécial",
+                answers: { a: "Vrai", b: "Faux" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Un alias sert à faire correspondre une commande (longue) avec une séquence de caractères (souvent plus courte)",
+                answers: { a: "Vrai", b: "Faux" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "GNU / Linux peut-il fonctionner sur des devices de type \"système embarqué\" ?",
+                answers: { a: "Oui", b: "Non" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Peut-on trouver des systèmes GNU / Linux dans des smart TV ?",
+                answers: { a: "Oui", b: "Non" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Le fichier /etc/shadow contient des mots de passe d'utilisateurs, en texte clair.",
+                answers: { a: "Vrai", b: "Faux" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Peut-il y avoir plusieurs utilisateurs utilisant un même système GNU / Linux en même temps ?",
+                answers: { a: "Oui", b: "Non" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Parmi ces propositions, laquelle n'est PAS une distribution Linux ?",
+                answers: { a: "Red Hat", b: "Debian", c: "Slackware", d: "Comanchero", e: "Arch Linux" },
+                correctAnswer: ["d"],
+                type: "single"
+            },
+            {
+                question: "Pour obtenir un shell et utiliser la ligne de commande linux, il faut lancer une application graphique de type :",
+                answers: { a: "package manager", b: "loader", c: "boot manager", d: "terminal", e: "GUI" },
+                correctAnswer: ["d"],
+                type: "single"
+            },
+            {
+                question: "Laquelle de ces commandes permet de visualiser la configuration réseau d'un machine :",
+                answers: { a: "net", b: "ipconfig", c: "ifconfig", d: "netconfig", e: "pwd" },
+                correctAnswer: ["c"],
+                type: "single"
+            },
+            {
+                question: "La notion de distribution dans GNU / Linux fait référence à :",
+                answers: { a: "un périphérique de stockage", b: "une version du noyau linux", c: "un ensemble d'outils permettant d'installer le système et ses applications", d: "une interface de type CLI"},
+                correctAnswer: ["c"],
+                type: "single"
+            },
+            {
+                question: "Laquelle de ces commandes affichera une liste des commandes que vous avez exécutées précédemment :",
+                answers: { a: "exec", b: "eval", c: "list", d: "history"},
+                correctAnswer: ["d"],
+                type: "single"
+            },
+            {
+                question: "Quelle commande Linux peut être utilisée pour afficher un message à l'écran ?",
+                answers: { a: "display", b: "type", c: "echo", d: "print"},
+                correctAnswer: ["c"],
+                type: "single"
+            },
+            {
+                question: "La commande 'cat' :",
+                answers: { a: "Affiche le contenu d'un fichier", b: "Affiche du texte console", c: "Duplique le flux d'entrée vers le flux de sortie", d: "Est utilisée pour l'affectation de variables" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Quelle est l'option standard à ajouter pour afficher la documentation courte d'un programme ?",
+                answers: { a: "--help", b: "-man", c: "-info", d: "-doc" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Quelle commande (shell) permet d'arrêter un processus dans un système GNU / Linux ?",
+                answers: { a: "stop", b: "kill", c: "ps", d: "top" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Quelle commande liste tous les fichiers d'un répertoire ?",
+                answers: { a: "ls", b: "file", c: "files", d: "list", e: "lsdir" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "HOME est un exemple de :",
+                answers: { a: "alias", b: "variable d'environnement", c: "variable locale", d: "commande interne"},
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Quelle variable d'environnement contient une liste de répertoires où le shell cherche les commandes ?",
+                answers: { a: "PATH", b: "PS2", c: "EXEC", d: "PS1" },
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "Quelle commande permet de déplacer des fichiers (ou les renommer) ?",
+                answers: { a: "rm", b: "cp", c: "mv", d: "cd" },
+                correctAnswer: ["c"],
+                type: "single"
+            },
+            {
+                question: "Qui a créé le noyau Linux ?",
+                answers: { a: "Bill Gates", b: "Steve Jobs", c: "Linus Torvalds", d: "Richard Stallman", e: "Maitre Gims" },
+                correctAnswer: ["c"],
+                type: "single"
+            },
+            {
+                question: "Qui a chanté la musique \"Ciel\" ?",
+                answers: { a: "Bill Gates", b: "Steve Jobs", c: "Linus Torvalds", d: "Richard Stallman", e: "Maitre Gims" },
+                correctAnswer: ["e"],
+                type: "single"
+            },
+            {
+                question: "Les deux points (..) sont utilisés pour représenter :",
+                answers: { a: "Le répertoire parent (au-dessus)", b: "Le répertoire actuel", c: "Le répertoire home", d: "Rien, ils n'ont pas de signification particulière"},
+                correctAnswer: ["a"],
+                type: "single"
+            },
+            {
+                question: "L'acronyme CLI signifie :",
+                answers: { a: "Computer Link Interface", b: "Command Line Interface", c: "Common Line Interpreter" },
+                correctAnswer: ["b"],
+                type: "single"
+            },
+            {
+                question: "Laquelle parmi ces permissions ne sont pas des permissions UNIX :",
+                answers: { a: "sticky bit", b: "setgid", c: "setuid", d: "setrid" },
+                correctAnswer: ["d"],
+                type: "single"
+            },
+            {
+                question: "Dans quel répertoire se situent la plupart des commandes système ?",
+                answers: { a: "/mnt", b: "/usr/local", c: "/var", d: "/usr/bin", e: "/etc/bin" },
+                correctAnswer: ["d"],
+                type: "single"
+            },
+            {
+                question: "GNU / Linux est-il un système d'exploitation multi-utilisateurs",
+                answers: { a: "Oui", b: "Non"},
+                correctAnswer: ["a"],
+                type: "single"
+            }
+        ];
+
+        // 2. LOGIQUE DE MÉLANGE (Fisher-Yates Shuffle)
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // On clone et mélange les questions au démarrage
+        let myQuestions = shuffleArray([...rawQuestions]);
+
+        const quizContainer = document.getElementById('quiz');
+        const resultsContainer = document.getElementById('results');
+        const submitButton = document.getElementById('submit-btn');
+        const revealButton = document.getElementById('reveal-btn');
+        const reloadButton = document.getElementById('reload-btn');
+
+        // 3. CONSTRUCTION DU QCM
+        function buildQuiz() {
+            const output = [];
+
+            myQuestions.forEach((currentQuestion, questionNumber) => {
+                const answers = [];
+                const inputType = currentQuestion.type === 'multiple' ? 'checkbox' : 'radio';
+                const hint = currentQuestion.type === 'multiple' 
+                    ? '<small>(Plusieurs choix possibles)</small>' 
+                    : '<small>(Une seule réponse)</small>';
+
+                for (const letter in currentQuestion.answers) {
+                    answers.push(
+                        `<li>
+                            <label>
+                                <input type="${inputType}" name="question${questionNumber}" value="${letter}">
+                                <b>${letter.toUpperCase()}</b> : ${currentQuestion.answers[letter]}
+                            </label>
+                        </li>`
+                    );
+                }
+
+                output.push(
+                    `<div class="question-block">
+                        <div class="question-title">
+                            ${questionNumber + 1}. ${currentQuestion.question} 
+                            <span class="question-hint">${hint}</span>
+                        </div>
+                        <ul class="answers-list">
+                            ${answers.join('')}
+                        </ul>
+                    </div>`
+                );
+            });
+
+            quizContainer.innerHTML = output.join('');
+        }
+
+        // 4. CALCUL DU SCORE
+        function showResults() {
+            const answerContainers = quizContainer.querySelectorAll('.answers-list');
+            let numCorrect = 0;
+
+            myQuestions.forEach((currentQuestion, questionNumber) => {
+                const answerContainer = answerContainers[questionNumber];
+                const selector = `input[name=question${questionNumber}]:checked`;
+                const userAnswers = (answerContainer.querySelectorAll(selector) || []);
+                
+                let userCheckedValues = [];
+                userAnswers.forEach(answer => userCheckedValues.push(answer.value));
+
+                // Vérification stricte (taille identique ET contenu identique)
+                let isCorrect = userCheckedValues.length === currentQuestion.correctAnswer.length;
+
+                if (isCorrect) {
+                    currentQuestion.correctAnswer.forEach(correctVal => {
+                        if (!userCheckedValues.includes(correctVal)) {
+                            isCorrect = false;
+                        }
+                    });
+                }
+
+                if (isCorrect) {
+                    numCorrect++;
+                }
+            });
+
+            // Affichage
+            resultsContainer.innerHTML = `Résultat : ${numCorrect} sur ${myQuestions.length}`;
+            resultsContainer.style.backgroundColor = (numCorrect === myQuestions.length) ? "#d4edda" : "#fff3cd";
+            resultsContainer.style.color = (numCorrect === myQuestions.length) ? "#155724" : "#856404";
+            
+            // Afficher le bouton de correction
+            revealButton.style.display = 'inline-block';
+            reloadButton.style.display = 'inline-block';
+            submitButton.style.display = 'none'; // On cache le bouton valider pour forcer le reload si on veut refaire
+        }
+
+        // 5. RÉVÉLATION (CORRECTION)
+        function revealAnswers() {
+            const answerContainers = quizContainer.querySelectorAll('.answers-list');
+
+            myQuestions.forEach((currentQuestion, questionNumber) => {
+                const answerContainer = answerContainers[questionNumber];
+                const inputs = answerContainer.querySelectorAll('input');
+
+                inputs.forEach(input => {
+                    const parentLabel = input.parentElement;
+                    
+                    // Reset
+                    parentLabel.classList.remove('correct-answer', 'user-wrong', 'missed-answer');
+
+                    const isCorrect = currentQuestion.correctAnswer.includes(input.value);
+                    const isChecked = input.checked;
+
+                    // Cas 1 : C'est une bonne réponse
+                    if (isCorrect) {
+                        parentLabel.classList.add('correct-answer');
+                        // Si l'utilisateur ne l'a pas cochée, on peut ajouter un style visuel supplémentaire si désiré
+                    }
+                    // Cas 2 : C'est une mauvaise réponse cochée par l'utilisateur
+                    else if (isChecked) {
+                        parentLabel.classList.add('user-wrong');
+                    }
+                });
+            });
+        }
+
+        // Initialisation
+        buildQuiz();
+
+        // Événements
+        submitButton.addEventListener('click', showResults);
+        revealButton.addEventListener('click', revealAnswers);
+
+    </script>
+</body>
+</html>
